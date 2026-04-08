@@ -7,33 +7,17 @@ import numpy as np
 from datetime import date
 import plotly.graph_objects as go
 
-try:
-    import matplotlib.pyplot as plt
-    HAS_MATPLOTLIB = True
-except:
-    HAS_MATPLOTLIB = False
-
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet
-
 # =========================
-# CONFIG
+# PAGE CONFIG
 # =========================
 st.set_page_config(page_title="Diabetes CDSS", layout="wide")
 
 # =========================
 # LOAD MODEL
 # =========================
-try:
-    model = joblib.load("model.pkl")
-    scaler = joblib.load("scaler.pkl")
-except Exception as e:
-    st.error(f"❌ Error loading model files: {e}")
-    st.stop()
+model = joblib.load("model.pkl")
+scaler = joblib.load("scaler.pkl")
 
-# =========================
-# FIXED THRESHOLDS
-# =========================
 LOW_THRESH = 0.35
 HIGH_THRESH = 0.65
 
@@ -48,32 +32,6 @@ def get_risk_level(prob, glucose):
     else:
         return "Low Risk"
 
-def get_confidence(prob):
-    if prob >= 0.8 or prob <= 0.2:
-        return "High Confidence"
-    elif prob >= 0.6 or prob <= 0.4:
-        return "Moderate Confidence"
-    else:
-        return "Low Confidence"
-
-def get_recommendation(risk, glucose, bmi):
-    if risk == "High Risk":
-        if glucose >= 200:
-            return "🚨 Severe hyperglycemia detected. Immediate physician evaluation required."
-        elif bmi >= 30:
-            return "⚠️ Obesity-related risk. Clinical intervention recommended."
-        else:
-            return "⚠️ High risk detected. Further diagnostic testing required."
-    elif risk == "Medium Risk":
-        return "Lifestyle modification and monitoring recommended."
-    else:
-        return "Maintain healthy lifestyle."
-
-def validate_inputs(glucose, bmi, age):
-    if glucose <= 0 or bmi <= 0:
-        return False, "Glucose and BMI must be greater than 0."
-    return True, ""
-
 def get_bmi_category(bmi):
     if bmi < 18.5: return "Underweight"
     elif bmi < 23: return "Normal"
@@ -86,78 +44,77 @@ def get_glucose_category(glucose):
     elif glucose < 200: return "Prediabetes"
     else: return "Diabetes"
 
-# =========================
-# PDF
-# =========================
-def generate_pdf(name, sex, date, glucose, bmi, age, prob, risk, reco):
-    doc = SimpleDocTemplate("report.pdf")
-    styles = getSampleStyleSheet()
-
-    content = []
-    content.append(Paragraph("Diabetes Clinical Decision Report", styles['Title']))
-    content.append(Spacer(1, 10))
-
-    content.append(Paragraph(f"Name: {name}", styles['Normal']))
-    content.append(Paragraph(f"Sex: {sex}", styles['Normal']))
-    content.append(Paragraph(f"Date: {date}", styles['Normal']))
-
-    content.append(Spacer(1, 10))
-    content.append(Paragraph(f"Probability: {prob:.2f}", styles['Normal']))
-    content.append(Paragraph(f"Risk Level: {risk}", styles['Normal']))
-
-    content.append(Spacer(1, 10))
-    content.append(Paragraph(reco, styles['Normal']))
-
-    doc.build(content)
-
-    with open("report.pdf", "rb") as f:
-        return f.read()
+def get_recommendation(risk):
+    if risk == "High Risk":
+        return "🚨 You are at high risk. Please consult a doctor immediately."
+    elif risk == "Medium Risk":
+        return "⚠️ You may be at risk. Consider improving diet and lifestyle."
+    else:
+        return "✅ Your results look healthy. Maintain a good lifestyle."
 
 # =========================
-# HEADER
+# HEADER (GRADIENT)
 # =========================
 st.markdown("""
-<h1 style='text-align:center;'>🩺 Diabetes Clinical Decision Support System</h1>
-<p style='text-align:center;color:gray;'>AI-Powered Clinical Risk Assessment</p>
-<hr>
+<div style="background:linear-gradient(90deg,#1e3c72,#2a5298);
+padding:25px;border-radius:12px;margin-bottom:20px">
+<h1 style="color:white;text-align:center;">🩺 Diabetes Clinical Decision Support System</h1>
+<p style="color:white;text-align:center;">AI-Powered Health Risk Assessment</p>
+</div>
 """, unsafe_allow_html=True)
 
 # =========================
-# INPUT CARD
+# PATIENT INFO (TOP)
 # =========================
-st.markdown("### 📋 Patient Information")
+colA, colB = st.columns([3,1])
+
+with colA:
+    name = st.text_input("👤 Patient Name")
+    sex = st.selectbox("⚧ Sex", ["Male", "Female"])
+
+with colB:
+    st.markdown("### 📅 Date")
+    st.info(date.today())
+
+st.divider()
+
+# =========================
+# INPUT SECTION
+# =========================
+st.markdown("## 📋 Health Information")
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
     preg = st.number_input("Pregnancies", 0, 20)
+    st.caption("Number of times pregnant")
+
     glucose = st.number_input("Glucose (mg/dL)", 0, 300)
+    st.caption("Blood sugar level")
 
 with col2:
-    bmi = st.number_input("BMI", 0.0, 70.0)
+    bmi = st.number_input("BMI (Body Mass Index)", 0.0, 70.0)
+    st.caption("Body fat based on height and weight")
+
     age = st.number_input("Age", 1, 120)
+    st.caption("Risk increases with age")
 
 with col3:
-    bp = st.number_input("Diastolic BP", 0, 150)
-    dpf = st.number_input("DPF", 0.0, 3.0)
+    bp = st.number_input("Diastolic Blood Pressure", 0, 150)
+    st.caption("Lower blood pressure value")
 
-name = st.text_input("Patient Name")
-sex = st.selectbox("Sex", ["Female", "Male"])
-visit_date = st.date_input("Date", value=date.today())
+    dpf = st.number_input("DPF (Genetic Risk Score)", 0.0, 3.0)
+    st.caption("Family history of diabetes")
 
 st.divider()
 
 # =========================
-# BUTTON
+# ANALYZE BUTTON
 # =========================
 if st.button("🔍 Analyze Patient Risk", use_container_width=True):
 
-    valid, msg = validate_inputs(glucose, bmi, age)
-    if not valid:
-        st.error(msg)
-        st.stop()
-
     with st.spinner("Analyzing patient data..."):
+
         input_data = np.array([[preg, glucose, bp, 0, 0, bmi, dpf, age]])
         input_scaled = scaler.transform(input_data)
 
@@ -165,8 +122,7 @@ if st.button("🔍 Analyze Patient Risk", use_container_width=True):
         prob = model.predict_proba(input_scaled)[0][1]
 
         risk = get_risk_level(prob, glucose)
-        confidence = get_confidence(prob)
-        reco = get_recommendation(risk, glucose, bmi)
+        reco = get_recommendation(risk)
 
     # =========================
     # RESULTS
@@ -178,11 +134,9 @@ if st.button("🔍 Analyze Patient Risk", use_container_width=True):
     colA.metric("Diagnosis", "Positive" if pred == 1 else "Negative")
     colB.metric("Probability", f"{prob:.2f}")
     colC.metric("Risk Level", risk)
-    colD.metric("Confidence", confidence)
+    colD.metric("Confidence", "High" if prob > 0.75 else "Moderate")
 
-    # =========================
-    # RISK COLOR
-    # =========================
+    # Risk Highlight
     if risk == "High Risk":
         st.markdown("<h2 style='color:#ff4d4d;'>🔴 HIGH RISK</h2>", unsafe_allow_html=True)
     elif risk == "Medium Risk":
@@ -200,59 +154,59 @@ if st.button("🔍 Analyze Patient Risk", use_container_width=True):
         gauge={
             'axis': {'range': [0, 100]},
             'steps': [
-                {'range': [0, LOW_THRESH * 100], 'color': "green"},
-                {'range': [LOW_THRESH * 100, HIGH_THRESH * 100], 'color': "yellow"},
-                {'range': [HIGH_THRESH * 100, 100], 'color': "red"},
+                {'range': [0, 35], 'color': "green"},
+                {'range': [35, 65], 'color': "yellow"},
+                {'range': [65, 100], 'color': "red"},
             ],
         }
     ))
     st.plotly_chart(fig, use_container_width=True)
 
     # =========================
-    # INTERPRETATION
+    # INTERPRETATION (BMI STYLE)
     # =========================
-    st.markdown("## 📌 Interpretation")
+    st.markdown("## 📌 Understanding Your Results")
 
-    st.write("**BMI:**", get_bmi_category(bmi))
-    st.write("**Glucose:**", get_glucose_category(glucose))
+    bmi_cat = get_bmi_category(bmi)
+    glucose_cat = get_glucose_category(glucose)
 
     st.markdown(f"""
-<div style="padding:20px;border-radius:10px;background:#3b3b0a;color:white">
-{reco}
-</div>
-""", unsafe_allow_html=True)
+### 🧍 Body Mass Index (BMI)
+**Category:** {bmi_cat}
 
-    # =========================
-    # FEATURE IMPORTANCE
-    # =========================
-    if HAS_MATPLOTLIB and hasattr(model, "feature_importances_"):
-        st.markdown("## 📊 Model Insights")
+BMI estimates body fat.
+- Normal: 18.5–25  
+- High BMI increases risk of diabetes and heart disease.
 
-        features = ["Preg", "Glucose", "BP", "Skin", "Insulin", "BMI", "DPF", "Age"]
-        importances = model.feature_importances_
+---
 
-        fig2, ax = plt.subplots()
-        ax.barh(features, importances)
-        st.pyplot(fig2)
+### 🩸 Blood Glucose
+**Status:** {glucose_cat}
 
-    # =========================
-    # PDF
-    # =========================
-    pdf_data = generate_pdf(name, sex, visit_date, glucose, bmi, age, prob, risk, reco)
+- Normal: <140  
+- Prediabetes: 140–199  
+- Diabetes: 200+  
 
-    st.download_button(
-        label="📄 Download Clinical Report",
-        data=pdf_data,
-        file_name="report.pdf",
-        mime="application/pdf"
-    )
+---
+
+### ⚠️ Diabetes Risk
+**Overall Risk:** {risk}
+
+This combines:
+- Blood sugar
+- Body weight
+- Age
+- Family history
+""")
+
+    st.success(reco)
 
 # =========================
 # FOOTER
 # =========================
 st.markdown("""
 <hr>
-<p style='text-align:center;color:gray;font-size:12px'>
-⚠️ For decision support only. Not a substitute for medical professionals.
+<p style='text-align:center;color:gray'>
+⚠️ For educational use only. Not a substitute for professional medical advice.
 </p>
 """, unsafe_allow_html=True)
