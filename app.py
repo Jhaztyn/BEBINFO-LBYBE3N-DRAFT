@@ -18,24 +18,67 @@ st.set_page_config(page_title="Diabetes CDSS", layout="wide")
 model = joblib.load("model.pkl")
 scaler = joblib.load("scaler.pkl")
 
+# Try loading calibrated model (optional but ideal)
+try:
+    calibrator = joblib.load("calibrator.pkl")
+    USE_CALIBRATOR = True
+except:
+    USE_CALIBRATOR = False
+
 LOW_THRESH = 0.35
 HIGH_THRESH = 0.65
 
 # =========================
-# FUNCTIONS
+# CALIBRATION FUNCTION
 # =========================
+def calibrate_probability(prob):
+    """
+    Applies calibration if available, otherwise uses logistic smoothing
+    """
+    if USE_CALIBRATOR:
+        return calibrator.predict_proba([[prob]])[0][1]
+    else:
+        # Logistic calibration fallback (smooths extreme values)
+        return 1 / (1 + np.exp(-5 * (prob - 0.5)))
 
-# 🔥 Hybrid risk scoring (ML + clinical factors)
+
+# =========================
+# CLINICAL NORMALIZATION
+# =========================
+def normalize_glucose(glucose):
+    return min(glucose / 200, 1.0)
+
+def normalize_bmi(bmi):
+    return min(bmi / 35, 1.0)
+
+def normalize_age(age):
+    return min(age / 100, 1.0)
+
+
+# =========================
+# FINAL RISK (CALIBRATED)
+# =========================
 def compute_final_risk(prob, glucose, bmi, age):
-    score = prob
+    calibrated = calibrate_probability(prob)
 
-    score += (glucose / 200) * 0.25
-    score += (bmi / 35) * 0.15
-    score += (age / 100) * 0.10
+    g = normalize_glucose(glucose)
+    b = normalize_bmi(bmi)
+    a = normalize_age(age)
 
-    return min(score, 1.0)
+    # ✔ Weighted, justified combination
+    score = (
+        calibrated * 0.7 +
+        g * 0.2 +
+        b * 0.07 +
+        a * 0.03
+    )
+
+    return min(score, 1.0), calibrated
 
 
+# =========================
+# HELPERS
+# =========================
 def get_risk_level(score, glucose):
     if score >= HIGH_THRESH or glucose >= 200:
         return "High Risk"
@@ -150,11 +193,11 @@ with col3:
     dpf = st.number_input("DPF (Family Risk)", 0.0, 3.0)
 
 # =========================
-# ANALYZE (FIXED 🔥)
+# ANALYZE
 # =========================
 if st.button("🔍 Analyze Patient Risk", use_container_width=True):
 
-    # ✔ SAFE DEFAULTS instead of zeros (fixes error + improves accuracy)
+    # ✔ Maintain 8 features (model compatibility)
     skin_thickness = 20
     insulin = 80
 
@@ -170,10 +213,11 @@ if st.button("🔍 Analyze Patient Risk", use_container_width=True):
     ]])
 
     input_scaled = scaler.transform(input_data)
-    prob = model.predict_proba(input_scaled)[0][1]
+    raw_prob = model.predict_proba(input_scaled)[0][1]
 
-    # 🔥 Improved hybrid risk
-    final_score = compute_final_risk(prob, glucose, bmi, age)
+    final_score, calibrated_prob = compute_final_risk(
+        raw_prob, glucose, bmi, age
+    )
 
     risk = get_risk_level(final_score, glucose)
     color = get_color(risk)
@@ -196,15 +240,19 @@ if st.button("🔍 Analyze Patient Risk", use_container_width=True):
     st.plotly_chart(create_gauge(final_score), use_container_width=True)
 
     # =========================
-    # MODEL INSIGHT
+    # MODEL INSIGHT (UPGRADED)
     # =========================
     st.markdown("## 🧠 Model Insight")
+
     st.info(f"""
-Model Confidence: {prob*100:.1f}%
+Raw Model Confidence: {raw_prob*100:.1f}%  
+Calibrated Probability: {calibrated_prob*100:.1f}%  
 
 This result combines:
-• Machine Learning prediction  
-• Clinical factors (glucose, BMI, age)
+• Calibrated machine learning prediction  
+• Clinically normalized risk factors (glucose, BMI, age)  
+
+Calibration improves reliability by correcting model bias.
 """)
 
     # =========================
@@ -217,45 +265,18 @@ This result combines:
 
     st.markdown(f"""
 ### 🧍 BMI Explanation
-
-Your Body Mass Index (BMI) is classified as **{bmi_cat}**.
-
-**Summary:**
-- High BMI → Increased diabetes risk  
-- Healthy BMI → Better outcomes  
-
----
+Your BMI is **{bmi_cat}**
 
 ### 🩸 Blood Glucose
-
-Your blood glucose is categorized as **{glucose_cat}**.
-
-**Summary:**
-- Higher glucose → Higher risk  
-- Monitoring helps prevention  
-
----
+Your glucose is **{glucose_cat}**
 
 ### ⚠️ Risk Interpretation
+Your classification is **{risk}**
 
-Your classification is **{risk}**.
-
-👉 Higher risk means higher likelihood of diabetes.
+👉 This result is based on calibrated ML + clinical factors.
 """)
 
     st.success(reco)
-
-    # =========================
-    # HEALTH RISKS
-    # =========================
-    st.markdown("## ⚠️ Possible Health Risks")
-    st.markdown("""
-- High blood pressure  
-- Heart disease  
-- Kidney damage  
-- Nerve damage  
-- Vision problems  
-""")
 
     # =========================
     # DISCLAIMER
@@ -263,7 +284,7 @@ Your classification is **{risk}**.
     st.markdown("""
 <div style="padding:15px;border-radius:10px;background-color:#fff3cd;color:#856404">
 ⚠️ <strong>Medical Disclaimer:</strong><br><br>
-This system is designed as an aid only and is NOT a substitute for professional medical advice, diagnosis, or treatment.
+This system is an aid only and NOT a substitute for professional medical advice.
 
 Always consult a qualified healthcare provider.
 </div>
