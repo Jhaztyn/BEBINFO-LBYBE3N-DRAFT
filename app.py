@@ -25,17 +25,12 @@ HIGH_THRESH = 0.65
 # FUNCTIONS
 # =========================
 
-# 🔥 Improved hybrid risk scoring
+# 🔥 Hybrid risk scoring (ML + clinical factors)
 def compute_final_risk(prob, glucose, bmi, age):
     score = prob
 
-    # Gradual glucose contribution
     score += (glucose / 200) * 0.25
-
-    # BMI contribution
     score += (bmi / 35) * 0.15
-
-    # Age contribution
     score += (age / 100) * 0.10
 
     return min(score, 1.0)
@@ -136,7 +131,7 @@ with colB:
 st.divider()
 
 # =========================
-# INPUTS (FIXED - no missing features)
+# INPUTS
 # =========================
 st.markdown("## 📋 Health Information")
 
@@ -147,25 +142,37 @@ with col1:
     glucose = st.number_input("Glucose (mg/dL)", 0, 300)
 
 with col2:
-    bmi = st.number_input("BMI", 0.0, 70.0)
+    bmi = st.number_input("BMI (Body Mass Index)", 0.0, 70.0)
     age = st.number_input("Age", 1, 120)
 
 with col3:
-    bp = st.number_input("Diastolic BP", 0, 150)
-    dpf = st.number_input("Diabetes Pedigree Function", 0.0, 3.0)
+    bp = st.number_input("Diastolic Blood Pressure", 0, 150)
+    dpf = st.number_input("DPF (Family Risk)", 0.0, 3.0)
 
 # =========================
-# ANALYZE
+# ANALYZE (FIXED 🔥)
 # =========================
 if st.button("🔍 Analyze Patient Risk", use_container_width=True):
 
-    # ✔ FIXED: No dummy zeros
-    input_data = np.array([[preg, glucose, bp, bmi, dpf, age]])
-    input_scaled = scaler.transform(input_data)
+    # ✔ SAFE DEFAULTS instead of zeros (fixes error + improves accuracy)
+    skin_thickness = 20
+    insulin = 80
 
+    input_data = np.array([[
+        preg,
+        glucose,
+        bp,
+        skin_thickness,
+        insulin,
+        bmi,
+        dpf,
+        age
+    ]])
+
+    input_scaled = scaler.transform(input_data)
     prob = model.predict_proba(input_scaled)[0][1]
 
-    # 🔥 Improved final risk
+    # 🔥 Improved hybrid risk
     final_score = compute_final_risk(prob, glucose, bmi, age)
 
     risk = get_risk_level(final_score, glucose)
@@ -173,7 +180,7 @@ if st.button("🔍 Analyze Patient Risk", use_container_width=True):
     reco = get_recommendation(risk)
 
     # =========================
-    # RESULT CARD (UNCHANGED UI)
+    # RESULT CARD
     # =========================
     st.markdown(f"""
     <div style="padding:30px;border-radius:15px;background:{color};text-align:center">
@@ -189,20 +196,19 @@ if st.button("🔍 Analyze Patient Risk", use_container_width=True):
     st.plotly_chart(create_gauge(final_score), use_container_width=True)
 
     # =========================
-    # MODEL TRANSPARENCY (NEW 🔥)
+    # MODEL INSIGHT
     # =========================
     st.markdown("## 🧠 Model Insight")
-
     st.info(f"""
 Model Confidence: {prob*100:.1f}%
 
 This result combines:
 • Machine Learning prediction  
-• Clinical risk factors (glucose, BMI, age)  
+• Clinical factors (glucose, BMI, age)
 """)
 
     # =========================
-    # DISCUSSION (UNCHANGED)
+    # DISCUSSION
     # =========================
     st.markdown("## 📌 Understanding Your Health")
 
@@ -211,38 +217,55 @@ This result combines:
 
     st.markdown(f"""
 ### 🧍 BMI Explanation
-Your BMI is **{bmi_cat}**.
+
+Your Body Mass Index (BMI) is classified as **{bmi_cat}**.
 
 **Summary:**
-- High BMI → ↑ diabetes risk  
-- Healthy BMI → better outcomes  
+- High BMI → Increased diabetes risk  
+- Healthy BMI → Better outcomes  
 
 ---
 
 ### 🩸 Blood Glucose
-Your glucose is **{glucose_cat}**.
+
+Your blood glucose is categorized as **{glucose_cat}**.
 
 **Summary:**
-- Higher glucose → higher risk  
-- Monitoring is critical  
+- Higher glucose → Higher risk  
+- Monitoring helps prevention  
 
 ---
 
 ### ⚠️ Risk Interpretation
-Your classification: **{risk}**
 
-👉 Higher risk = higher likelihood of diabetes
+Your classification is **{risk}**.
+
+👉 Higher risk means higher likelihood of diabetes.
 """)
 
     st.success(reco)
 
     # =========================
-    # DISCLAIMER (UNCHANGED)
+    # HEALTH RISKS
+    # =========================
+    st.markdown("## ⚠️ Possible Health Risks")
+    st.markdown("""
+- High blood pressure  
+- Heart disease  
+- Kidney damage  
+- Nerve damage  
+- Vision problems  
+""")
+
+    # =========================
+    # DISCLAIMER
     # =========================
     st.markdown("""
 <div style="padding:15px;border-radius:10px;background-color:#fff3cd;color:#856404">
 ⚠️ <strong>Medical Disclaimer:</strong><br><br>
-This system is an aid only and NOT a substitute for professional medical advice.
+This system is designed as an aid only and is NOT a substitute for professional medical advice, diagnosis, or treatment.
+
+Always consult a qualified healthcare provider.
 </div>
 """, unsafe_allow_html=True)
 
@@ -252,6 +275,6 @@ This system is an aid only and NOT a substitute for professional medical advice.
 st.markdown("""
 <hr>
 <p style='text-align:center;color:gray'>
-Educational tool only.
+Educational tool only. Not medical advice.
 </p>
 """, unsafe_allow_html=True)
