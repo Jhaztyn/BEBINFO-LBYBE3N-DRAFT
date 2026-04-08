@@ -5,8 +5,14 @@ import streamlit as st
 import joblib
 import numpy as np
 from datetime import date
-import matplotlib.pyplot as plt
 import plotly.graph_objects as go
+
+# Safe matplotlib import (prevents crash if missing)
+try:
+    import matplotlib.pyplot as plt
+    HAS_MATPLOTLIB = True
+except:
+    HAS_MATPLOTLIB = False
 
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
@@ -25,8 +31,6 @@ try:
 except Exception as e:
     st.error(f"❌ Error loading model files: {e}")
     st.stop()
-
-MODEL_INFO = "Random Forest | PIMA Dataset | ROC-Optimized Thresholds"
 
 # =========================
 # FUNCTIONS
@@ -52,24 +56,24 @@ def get_recommendation(risk, glucose, bmi):
         if glucose >= 200:
             return "🚨 Severe hyperglycemia detected. Immediate physician evaluation required."
         elif bmi >= 30:
-            return "⚠️ Obesity-related risk. Structured intervention and monitoring advised."
+            return "⚠️ Obesity-related risk. Clinical intervention recommended."
         else:
             return "⚠️ High risk detected. Further diagnostic testing required."
 
     elif risk == "Medium Risk":
         if bmi >= 25:
-            return "Lifestyle modification + regular glucose monitoring recommended."
+            return "Lifestyle modification + monitoring recommended."
         else:
-            return "Monitor glucose and maintain preventive lifestyle."
+            return "Maintain preventive lifestyle and monitoring."
 
     else:
-        return "Maintain healthy lifestyle and periodic screening."
+        return "Maintain healthy lifestyle and routine screening."
 
 def validate_inputs(glucose, bmi, age):
     if glucose <= 0 or bmi <= 0:
         return False, "Glucose and BMI must be greater than 0."
     if age <= 0:
-        return False, "Age must be valid."
+        return False, "Invalid age."
     return True, ""
 
 def get_bmi_category(bmi):
@@ -119,9 +123,9 @@ def generate_pdf(name, sex, date, glucose, bmi, age, prob, risk, reco):
 st.set_page_config(page_title="Diabetes CDSS", layout="wide")
 
 st.title("🩺 Diabetes Clinical Decision Support System")
-st.markdown("### ML + Clinical Intelligence for Risk Prediction")
+st.markdown("### AI-Powered Risk Prediction")
 
-st.info(f"Model: {MODEL_INFO}")
+st.info("Model: Random Forest | ROC-Optimized Thresholds")
 
 # =========================
 # INPUT
@@ -175,7 +179,6 @@ if st.button("🔍 Analyze Patient Risk"):
     st.subheader("📊 Results")
 
     colA, colB, colC, colD = st.columns(4)
-
     colA.metric("Prediction", "Positive" if pred == 1 else "Negative")
     colB.metric("Probability", f"{prob:.2f}")
     colC.metric("Risk Level", risk)
@@ -204,16 +207,15 @@ if st.button("🔍 Analyze Patient Risk"):
     # INTERPRETATION
     # =========================
     st.subheader("📌 Interpretation")
-
     st.write("BMI:", get_bmi_category(bmi))
     st.write("Glucose:", get_glucose_category(glucose))
 
     st.warning(reco)
 
     # =========================
-    # EXPLAINABILITY
+    # FEATURE IMPORTANCE (SAFE)
     # =========================
-    if hasattr(model, "feature_importances_"):
+    if HAS_MATPLOTLIB and hasattr(model, "feature_importances_"):
         st.subheader("📊 Feature Importance")
 
         features = ["Preg", "Glucose", "BP", "Skin", "Insulin", "BMI", "DPF", "Age"]
@@ -222,6 +224,8 @@ if st.button("🔍 Analyze Patient Risk"):
         fig2, ax = plt.subplots()
         ax.barh(features, importances)
         st.pyplot(fig2)
+    else:
+        st.info("Feature importance unavailable (matplotlib not installed or unsupported model).")
 
     # =========================
     # PDF
