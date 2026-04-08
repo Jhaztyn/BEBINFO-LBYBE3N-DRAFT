@@ -7,7 +7,7 @@ import numpy as np
 from datetime import date
 import plotly.graph_objects as go
 
-# Safe matplotlib import (prevents crash if missing)
+# Safe matplotlib import
 try:
     import matplotlib.pyplot as plt
     HAS_MATPLOTLIB = True
@@ -18,19 +18,20 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 
 # =========================
-# LOAD FILES
+# LOAD MODEL + SCALER ONLY
 # =========================
 try:
     model = joblib.load("model.pkl")
     scaler = joblib.load("scaler.pkl")
-    thresholds = joblib.load("thresholds.pkl")
-
-    LOW_THRESH = thresholds["low"]
-    HIGH_THRESH = thresholds["high"]
-
 except Exception as e:
     st.error(f"❌ Error loading model files: {e}")
     st.stop()
+
+# =========================
+# FIXED THRESHOLDS (NO FILE)
+# =========================
+LOW_THRESH = 0.35
+HIGH_THRESH = 0.65
 
 # =========================
 # FUNCTIONS
@@ -125,7 +126,7 @@ st.set_page_config(page_title="Diabetes CDSS", layout="wide")
 st.title("🩺 Diabetes Clinical Decision Support System")
 st.markdown("### AI-Powered Risk Prediction")
 
-st.info("Model: Random Forest | ROC-Optimized Thresholds")
+st.info("Model: Random Forest | Fixed Thresholds")
 
 # =========================
 # INPUT
@@ -213,7 +214,7 @@ if st.button("🔍 Analyze Patient Risk"):
     st.warning(reco)
 
     # =========================
-    # FEATURE IMPORTANCE (SAFE)
+    # FEATURE IMPORTANCE
     # =========================
     if HAS_MATPLOTLIB and hasattr(model, "feature_importances_"):
         st.subheader("📊 Feature Importance")
@@ -224,8 +225,6 @@ if st.button("🔍 Analyze Patient Risk"):
         fig2, ax = plt.subplots()
         ax.barh(features, importances)
         st.pyplot(fig2)
-    else:
-        st.info("Feature importance unavailable (matplotlib not installed or unsupported model).")
 
     # =========================
     # PDF
