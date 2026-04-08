@@ -32,13 +32,16 @@ def get_risk_level(prob, glucose):
     else:
         return "Low Risk"
 
-def get_color(risk):
-    if risk == "High Risk":
-        return "#ff4d4d"
-    elif risk == "Medium Risk":
-        return "#ffcc00"
-    else:
-        return "#00cc66"
+def get_bmi_category(bmi):
+    if bmi < 18.5: return "Underweight"
+    elif bmi < 25: return "Normal"
+    elif bmi < 30: return "Overweight"
+    else: return "Obese"
+
+def get_glucose_category(glucose):
+    if glucose < 140: return "Normal"
+    elif glucose < 200: return "Prediabetes"
+    else: return "Diabetes"
 
 def get_recommendation(risk):
     if risk == "High Risk":
@@ -49,26 +52,7 @@ def get_recommendation(risk):
         return "✅ Maintain a healthy lifestyle."
 
 # =========================
-# WHY EXPLANATION
-# =========================
-def explain_result(glucose, bmi, dpf, age):
-    reasons = []
-
-    if glucose >= 180:
-        reasons.append("High blood sugar level")
-    if bmi < 18.5:
-        reasons.append("Low body weight (underweight)")
-    if bmi > 30:
-        reasons.append("High body weight (obesity)")
-    if dpf > 0.8:
-        reasons.append("Strong family history of diabetes")
-    if age > 45:
-        reasons.append("Age-related risk factor")
-
-    return reasons
-
-# =========================
-# GAUGE
+# SEMICIRCLE GAUGE (NO PIE)
 # =========================
 def create_gauge(prob):
     value = prob * 100
@@ -76,20 +60,50 @@ def create_gauge(prob):
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=value,
-        number={'suffix': "%", 'font': {'size': 42}},
+
+        number={
+            'suffix': "%",
+            'font': {'size': 40}
+        },
+
+        title={
+            'text': "Risk Level",
+            'font': {'size': 20}
+        },
+
         gauge={
-            'shape': "angular",
-            'axis': {'range': [0, 100]},
-            'bar': {'color': "black"},
+            'shape': "angular",  # semicircle
+
+            'axis': {
+                'range': [0, 100],
+                'tickvals': [0, 25, 50, 75, 100]
+            },
+
+            'bar': {
+                'color': "black",
+                'thickness': 0.2
+            },
+
             'steps': [
-                {'range': [0, 35], 'color': "#00cc66"},
-                {'range': [35, 65], 'color': "#ffcc00"},
-                {'range': [65, 100], 'color': "#ff4d4d"},
+                {'range': [0, 35], 'color': "green"},
+                {'range': [35, 65], 'color': "yellow"},
+                {'range': [65, 100], 'color': "red"},
             ],
+
+            'threshold': {
+                'line': {'color': "white", 'width': 4},
+                'thickness': 0.75,
+                'value': value
+            }
         }
     ))
 
-    fig.update_layout(height=350, margin=dict(l=20, r=20, t=20, b=20))
+    fig.update_layout(
+        height=400,
+        margin=dict(l=20, r=20, t=50, b=20),
+        paper_bgcolor="rgba(0,0,0,0)"
+    )
+
     return fig
 
 # =========================
@@ -127,15 +141,24 @@ col1, col2, col3 = st.columns(3)
 
 with col1:
     preg = st.number_input("Pregnancies", 0, 20)
+    st.caption("Number of pregnancies")
+
     glucose = st.number_input("Glucose (mg/dL)", 0, 300)
+    st.caption("Blood sugar level")
 
 with col2:
-    bmi = st.number_input("BMI", 0.0, 70.0)
+    bmi = st.number_input("BMI (Body Mass Index)", 0.0, 70.0)
+    st.caption("Body fat indicator")
+
     age = st.number_input("Age", 1, 120)
+    st.caption("Risk increases with age")
 
 with col3:
-    bp = st.number_input("Diastolic BP", 0, 150)
-    dpf = st.number_input("DPF", 0.0, 3.0)
+    bp = st.number_input("Diastolic Blood Pressure", 0, 150)
+    st.caption("Lower blood pressure value")
+
+    dpf = st.number_input("DPF (Family Risk)", 0.0, 3.0)
+    st.caption("Family history influence")
 
 # =========================
 # ANALYZE
@@ -149,51 +172,77 @@ if st.button("🔍 Analyze Patient Risk", use_container_width=True):
     prob = model.predict_proba(input_scaled)[0][1]
 
     risk = get_risk_level(prob, glucose)
-    color = get_color(risk)
     reco = get_recommendation(risk)
 
     # =========================
-    # RESULT CARD (MAIN FOCUS)
+    # RESULTS
     # =========================
-    st.markdown(f"""
-    <div style="padding:30px;border-radius:15px;background:{color};text-align:center;color:black">
-        <h1>{risk}</h1>
-        <h2>{prob*100:.1f}% Risk Probability</h2>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("## 📊 Results")
 
-    st.markdown("## 📊 Risk Visualization")
-    st.plotly_chart(create_gauge(prob), use_container_width=True)
+    colA, colB, colC = st.columns(3)
+    colA.metric("Diagnosis", "Positive" if pred == 1 else "Negative")
+    colB.metric("Probability", f"{prob:.2f}")
+    colC.metric("Risk Level", risk)
 
-    # =========================
-    # WHY SECTION
-    # =========================
-    st.markdown("## 🧠 Why this result?")
-
-    reasons = explain_result(glucose, bmi, dpf, age)
-
-    if reasons:
-        for r in reasons:
-            st.write(f"• {r}")
-    else:
-        st.write("No strong risk factors detected.")
+    # SEMICIRCLE GAUGE
+    fig = create_gauge(prob)
+    st.plotly_chart(fig, use_container_width=True)
 
     # =========================
-    # RECOMMENDATION
-    # =========================
-    st.markdown("## 💡 Recommendation")
-    st.success(reco)
-
-    # =========================
-    # EDUCATIONAL SECTION
+    # EXPLANATION
     # =========================
     st.markdown("## 📌 Understanding Your Health")
 
-    st.info("""
-    • BMI indicates body fat level  
-    • Glucose shows blood sugar levels  
-    • Higher values increase diabetes risk  
-    """)
+    bmi_cat = get_bmi_category(bmi)
+    glucose_cat = get_glucose_category(glucose)
+
+    st.markdown(f"""
+### 🧍 BMI Explanation
+**Category:** {bmi_cat}
+
+BMI helps estimate body fat:
+- High BMI → risk of diabetes & heart disease
+- Low BMI → possible undernutrition
+
+---
+
+### 🩸 Blood Glucose
+**Status:** {glucose_cat}
+
+- Normal: <140  
+- Prediabetes: 140–199  
+- Diabetes: ≥200  
+
+---
+
+### ⚠️ Risk Interpretation
+**Overall Risk:** {risk}
+
+Based on:
+- Blood sugar
+- Body weight
+- Age
+- Family history
+
+👉 Higher risk means greater likelihood of diabetes.
+""")
+
+    st.success(reco)
+
+    # =========================
+    # HEALTH RISKS
+    # =========================
+    st.markdown("## ⚠️ Possible Health Risks")
+
+    st.markdown("""
+- High blood pressure  
+- Heart disease  
+- Kidney problems  
+- Nerve damage  
+- Vision problems  
+
+Healthy lifestyle changes can reduce these risks.
+""")
 
 # =========================
 # FOOTER
@@ -201,6 +250,6 @@ if st.button("🔍 Analyze Patient Risk", use_container_width=True):
 st.markdown("""
 <hr>
 <p style='text-align:center;color:gray'>
-⚠️ For educational use only. Not medical advice.
+⚠️ This tool is for educational purposes only.
 </p>
 """, unsafe_allow_html=True)
