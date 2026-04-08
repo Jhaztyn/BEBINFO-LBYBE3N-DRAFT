@@ -53,28 +53,25 @@ def get_recommendation(risk):
         return "✅ Maintain a healthy lifestyle."
 
 # =========================
-# BMI-STYLE GAUGE FUNCTION
+# SEMI-CIRCLE GAUGE
 # =========================
 def create_pointer_gauge(prob):
     value = prob * 100
 
-    # Convert value to angle (180° semicircle)
     angle = (value / 100) * 180
     radians = math.radians(180 - angle)
 
-    # Needle position
     x = 0.5 + 0.4 * math.cos(radians)
     y = 0.5 + 0.4 * math.sin(radians)
 
     fig = go.Figure()
 
-    # Colored zones
     fig.add_trace(go.Pie(
-        values=[35, 30, 35],
+        values=[35, 30, 35, 100],
         rotation=180,
         hole=0.6,
-        marker=dict(colors=["green", "yellow", "red"]),
-        text=["Low", "Medium", "High"],
+        marker=dict(colors=["green", "yellow", "red", "rgba(0,0,0,0)"]),
+        text=["Low", "Medium", "High", ""],
         direction="clockwise",
         showlegend=False
     ))
@@ -85,6 +82,7 @@ def create_pointer_gauge(prob):
                   x1=x, y1=y,
                   line=dict(color="white", width=4))
 
+    # Center dot
     fig.add_shape(type="circle",
                   x0=0.48, y0=0.48,
                   x1=0.52, y1=0.52,
@@ -92,9 +90,10 @@ def create_pointer_gauge(prob):
                   line_color="white")
 
     fig.update_layout(
-        showlegend=False,
         margin=dict(l=0, r=0, t=40, b=0),
-        title="Risk Level Indicator"
+        height=400,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)"
     )
 
     return fig
@@ -140,15 +139,15 @@ with col1:
     st.caption("Blood sugar level")
 
 with col2:
-    bmi = st.number_input("BMI", 0.0, 70.0)
-    st.caption("Body Mass Index")
+    bmi = st.number_input("BMI (Body Mass Index)", 0.0, 70.0)
+    st.caption("Body fat indicator")
 
     age = st.number_input("Age", 1, 120)
-    st.caption("Age increases risk")
+    st.caption("Risk increases with age")
 
 with col3:
     bp = st.number_input("Diastolic BP", 0, 150)
-    st.caption("Lower blood pressure")
+    st.caption("Lower blood pressure value")
 
     dpf = st.number_input("DPF (Family Risk)", 0.0, 3.0)
     st.caption("Family history influence")
@@ -177,12 +176,12 @@ if st.button("🔍 Analyze Patient Risk", use_container_width=True):
     colB.metric("Probability", f"{prob:.2f}")
     colC.metric("Risk Level", risk)
 
-    # BMI STYLE GAUGE
+    # SEMI-CIRCLE GAUGE
     fig = create_pointer_gauge(prob)
     st.plotly_chart(fig, use_container_width=True)
 
     # =========================
-    # EDUCATIONAL SECTION (LIKE YOUR REFERENCE)
+    # EDUCATIONAL SECTION
     # =========================
     st.markdown("## 📌 Understanding Your Health")
 
@@ -191,16 +190,16 @@ if st.button("🔍 Analyze Patient Risk", use_container_width=True):
 
     st.markdown(f"""
 ### 🧍 BMI Explanation
-Your BMI is categorized as **{bmi_cat}**
+**Category:** {bmi_cat}
 
-BMI helps determine if your weight is healthy.
+BMI indicates body fat level.
 - High BMI → risk of diabetes & heart disease
-- Low BMI → possible nutritional deficiency
+- Low BMI → possible undernutrition
 
 ---
 
 ### 🩸 Glucose Explanation
-Your glucose level is **{glucose_cat}**
+**Status:** {glucose_cat}
 
 - Normal: <140  
 - Prediabetes: 140–199  
@@ -209,34 +208,32 @@ Your glucose level is **{glucose_cat}**
 ---
 
 ### ⚠️ Risk Interpretation
-Your overall risk is **{risk}**
+**Overall Risk:** {risk}
 
-This combines:
+Based on:
 - Blood sugar
 - Body weight
 - Age
 - Family history
 
-👉 Higher risk means greater likelihood of diabetes.
+👉 Higher risk = higher likelihood of diabetes.
 """)
 
     st.success(reco)
 
     # =========================
-    # RISKS SECTION (LIKE YOUR IMAGE)
+    # HEALTH RISKS
     # =========================
-    st.markdown("## ⚠️ Health Risks")
+    st.markdown("## ⚠️ Possible Health Risks")
 
     st.markdown("""
-Possible risks associated with high diabetes risk:
-
 - High blood pressure  
 - Heart disease  
 - Kidney problems  
 - Nerve damage  
-- Vision problems  
+- Vision loss  
 
-Maintaining a healthy lifestyle can reduce these risks.
+Healthy lifestyle changes can significantly reduce these risks.
 """)
 
 # =========================
