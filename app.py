@@ -7,7 +7,6 @@ import numpy as np
 from datetime import date
 import plotly.graph_objects as go
 
-# Safe matplotlib import
 try:
     import matplotlib.pyplot as plt
     HAS_MATPLOTLIB = True
@@ -18,7 +17,12 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
 
 # =========================
-# LOAD MODEL + SCALER ONLY
+# CONFIG
+# =========================
+st.set_page_config(page_title="Diabetes CDSS", layout="wide")
+
+# =========================
+# LOAD MODEL
 # =========================
 try:
     model = joblib.load("model.pkl")
@@ -28,7 +32,7 @@ except Exception as e:
     st.stop()
 
 # =========================
-# FIXED THRESHOLDS (NO FILE)
+# FIXED THRESHOLDS
 # =========================
 LOW_THRESH = 0.35
 HIGH_THRESH = 0.65
@@ -60,21 +64,14 @@ def get_recommendation(risk, glucose, bmi):
             return "⚠️ Obesity-related risk. Clinical intervention recommended."
         else:
             return "⚠️ High risk detected. Further diagnostic testing required."
-
     elif risk == "Medium Risk":
-        if bmi >= 25:
-            return "Lifestyle modification + monitoring recommended."
-        else:
-            return "Maintain preventive lifestyle and monitoring."
-
+        return "Lifestyle modification and monitoring recommended."
     else:
-        return "Maintain healthy lifestyle and routine screening."
+        return "Maintain healthy lifestyle."
 
 def validate_inputs(glucose, bmi, age):
     if glucose <= 0 or bmi <= 0:
         return False, "Glucose and BMI must be greater than 0."
-    if age <= 0:
-        return False, "Invalid age."
     return True, ""
 
 def get_bmi_category(bmi):
@@ -103,14 +100,12 @@ def generate_pdf(name, sex, date, glucose, bmi, age, prob, risk, reco):
     content.append(Paragraph(f"Name: {name}", styles['Normal']))
     content.append(Paragraph(f"Sex: {sex}", styles['Normal']))
     content.append(Paragraph(f"Date: {date}", styles['Normal']))
-    content.append(Spacer(1, 10))
 
-    content.append(Paragraph("Results", styles['Heading2']))
+    content.append(Spacer(1, 10))
     content.append(Paragraph(f"Probability: {prob:.2f}", styles['Normal']))
     content.append(Paragraph(f"Risk Level: {risk}", styles['Normal']))
-    content.append(Spacer(1, 10))
 
-    content.append(Paragraph("Recommendation", styles['Heading2']))
+    content.append(Spacer(1, 10))
     content.append(Paragraph(reco, styles['Normal']))
 
     doc.build(content)
@@ -119,18 +114,19 @@ def generate_pdf(name, sex, date, glucose, bmi, age, prob, risk, reco):
         return f.read()
 
 # =========================
-# UI
+# HEADER
 # =========================
-st.set_page_config(page_title="Diabetes CDSS", layout="wide")
-
-st.title("🩺 Diabetes Clinical Decision Support System")
-st.markdown("### AI-Powered Risk Prediction")
-
-st.info("Model: Random Forest | Fixed Thresholds")
+st.markdown("""
+<h1 style='text-align:center;'>🩺 Diabetes Clinical Decision Support System</h1>
+<p style='text-align:center;color:gray;'>AI-Powered Clinical Risk Assessment</p>
+<hr>
+""", unsafe_allow_html=True)
 
 # =========================
-# INPUT
+# INPUT CARD
 # =========================
+st.markdown("### 📋 Patient Information")
+
 col1, col2, col3 = st.columns(3)
 
 with col1:
@@ -149,17 +145,19 @@ name = st.text_input("Patient Name")
 sex = st.selectbox("Sex", ["Female", "Male"])
 visit_date = st.date_input("Date", value=date.today())
 
+st.divider()
+
 # =========================
-# PREDICT
+# BUTTON
 # =========================
-if st.button("🔍 Analyze Patient Risk"):
+if st.button("🔍 Analyze Patient Risk", use_container_width=True):
 
     valid, msg = validate_inputs(glucose, bmi, age)
     if not valid:
         st.error(msg)
         st.stop()
 
-    try:
+    with st.spinner("Analyzing patient data..."):
         input_data = np.array([[preg, glucose, bp, 0, 0, bmi, dpf, age]])
         input_scaled = scaler.transform(input_data)
 
@@ -170,20 +168,27 @@ if st.button("🔍 Analyze Patient Risk"):
         confidence = get_confidence(prob)
         reco = get_recommendation(risk, glucose, bmi)
 
-    except Exception as e:
-        st.error(f"Prediction error: {e}")
-        st.stop()
-
     # =========================
     # RESULTS
     # =========================
-    st.subheader("📊 Results")
+    st.markdown("## 📊 Results")
 
     colA, colB, colC, colD = st.columns(4)
-    colA.metric("Prediction", "Positive" if pred == 1 else "Negative")
+
+    colA.metric("Diagnosis", "Positive" if pred == 1 else "Negative")
     colB.metric("Probability", f"{prob:.2f}")
     colC.metric("Risk Level", risk)
     colD.metric("Confidence", confidence)
+
+    # =========================
+    # RISK COLOR
+    # =========================
+    if risk == "High Risk":
+        st.markdown("<h2 style='color:#ff4d4d;'>🔴 HIGH RISK</h2>", unsafe_allow_html=True)
+    elif risk == "Medium Risk":
+        st.markdown("<h2 style='color:#ffcc00;'>🟡 MEDIUM RISK</h2>", unsafe_allow_html=True)
+    else:
+        st.markdown("<h2 style='color:#00cc66;'>🟢 LOW RISK</h2>", unsafe_allow_html=True)
 
     # =========================
     # GAUGE
@@ -201,23 +206,27 @@ if st.button("🔍 Analyze Patient Risk"):
             ],
         }
     ))
-
     st.plotly_chart(fig, use_container_width=True)
 
     # =========================
     # INTERPRETATION
     # =========================
-    st.subheader("📌 Interpretation")
-    st.write("BMI:", get_bmi_category(bmi))
-    st.write("Glucose:", get_glucose_category(glucose))
+    st.markdown("## 📌 Interpretation")
 
-    st.warning(reco)
+    st.write("**BMI:**", get_bmi_category(bmi))
+    st.write("**Glucose:**", get_glucose_category(glucose))
+
+    st.markdown(f"""
+<div style="padding:20px;border-radius:10px;background:#3b3b0a;color:white">
+{reco}
+</div>
+""", unsafe_allow_html=True)
 
     # =========================
     # FEATURE IMPORTANCE
     # =========================
     if HAS_MATPLOTLIB and hasattr(model, "feature_importances_"):
-        st.subheader("📊 Feature Importance")
+        st.markdown("## 📊 Model Insights")
 
         features = ["Preg", "Glucose", "BP", "Skin", "Insulin", "BMI", "DPF", "Age"]
         importances = model.feature_importances_
@@ -232,10 +241,18 @@ if st.button("🔍 Analyze Patient Risk"):
     pdf_data = generate_pdf(name, sex, visit_date, glucose, bmi, age, prob, risk, reco)
 
     st.download_button(
-        label="📄 Download Report",
+        label="📄 Download Clinical Report",
         data=pdf_data,
         file_name="report.pdf",
         mime="application/pdf"
     )
 
-    st.caption("⚠️ For decision support only. Not a substitute for medical professionals.")
+# =========================
+# FOOTER
+# =========================
+st.markdown("""
+<hr>
+<p style='text-align:center;color:gray;font-size:12px'>
+⚠️ For decision support only. Not a substitute for medical professionals.
+</p>
+""", unsafe_allow_html=True)
