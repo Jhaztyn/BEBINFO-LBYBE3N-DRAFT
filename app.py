@@ -32,6 +32,14 @@ def get_risk_level(prob, glucose):
     else:
         return "Low Risk"
 
+def get_color(risk):
+    if risk == "High Risk":
+        return "#ff4d4d"
+    elif risk == "Medium Risk":
+        return "#ffcc00"
+    else:
+        return "#12c06a"
+
 def get_bmi_category(bmi):
     if bmi < 18.5: return "Underweight"
     elif bmi < 25: return "Normal"
@@ -52,7 +60,7 @@ def get_recommendation(risk):
         return "✅ Maintain a healthy lifestyle."
 
 # =========================
-# SEMICIRCLE GAUGE (NO PIE)
+# GAUGE
 # =========================
 def create_gauge(prob):
     value = prob * 100
@@ -60,50 +68,33 @@ def create_gauge(prob):
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=value,
-
-        number={
-            'suffix': "%",
-            'font': {'size': 40}
-        },
-
-        title={
-            'text': "Risk Level",
-            'font': {'size': 20}
-        },
+        number={'suffix': "%", 'font': {'size': 52}},
 
         gauge={
-            'shape': "angular",  # semicircle
+            'shape': "angular",
 
             'axis': {
                 'range': [0, 100],
-                'tickvals': [0, 25, 50, 75, 100]
+                'tickvals': [0, 20, 40, 60, 80, 100],
             },
 
-            'bar': {
-                'color': "black",
-                'thickness': 0.2
-            },
+            'bar': {'color': "rgba(0,0,0,0)"},
 
             'steps': [
-                {'range': [0, 35], 'color': "green"},
-                {'range': [35, 65], 'color': "yellow"},
-                {'range': [65, 100], 'color': "red"},
+                {'range': [0, 35], 'color': "#12c06a"},
+                {'range': [35, 65], 'color': "#ffcc00"},
+                {'range': [65, 100], 'color': "#ff4d4d"},
             ],
 
             'threshold': {
-                'line': {'color': "white", 'width': 4},
-                'thickness': 0.75,
+                'line': {'color': "black", 'width': 6},
+                'thickness': 0.8,
                 'value': value
             }
         }
     ))
 
-    fig.update_layout(
-        height=400,
-        margin=dict(l=20, r=20, t=50, b=20),
-        paper_bgcolor="rgba(0,0,0,0)"
-    )
-
+    fig.update_layout(height=420, margin=dict(l=10, r=10, t=20, b=10))
     return fig
 
 # =========================
@@ -141,24 +132,15 @@ col1, col2, col3 = st.columns(3)
 
 with col1:
     preg = st.number_input("Pregnancies", 0, 20)
-    st.caption("Number of pregnancies")
-
     glucose = st.number_input("Glucose (mg/dL)", 0, 300)
-    st.caption("Blood sugar level")
 
 with col2:
     bmi = st.number_input("BMI (Body Mass Index)", 0.0, 70.0)
-    st.caption("Body fat indicator")
-
     age = st.number_input("Age", 1, 120)
-    st.caption("Risk increases with age")
 
 with col3:
     bp = st.number_input("Diastolic Blood Pressure", 0, 150)
-    st.caption("Lower blood pressure value")
-
     dpf = st.number_input("DPF (Family Risk)", 0.0, 3.0)
-    st.caption("Family history influence")
 
 # =========================
 # ANALYZE
@@ -172,24 +154,27 @@ if st.button("🔍 Analyze Patient Risk", use_container_width=True):
     prob = model.predict_proba(input_scaled)[0][1]
 
     risk = get_risk_level(prob, glucose)
+    color = get_color(risk)
     reco = get_recommendation(risk)
 
     # =========================
-    # RESULTS
+    # RESULT CARD (KEEP THIS STYLE)
     # =========================
-    st.markdown("## 📊 Results")
-
-    colA, colB, colC = st.columns(3)
-    colA.metric("Diagnosis", "Positive" if pred == 1 else "Negative")
-    colB.metric("Probability", f"{prob:.2f}")
-    colC.metric("Risk Level", risk)
-
-    # SEMICIRCLE GAUGE
-    fig = create_gauge(prob)
-    st.plotly_chart(fig, use_container_width=True)
+    st.markdown(f"""
+    <div style="padding:30px;border-radius:15px;background:{color};text-align:center">
+        <h1>{risk}</h1>
+        <h2>{prob*100:.1f}% Risk Probability</h2>
+    </div>
+    """, unsafe_allow_html=True)
 
     # =========================
-    # EXPLANATION
+    # GAUGE
+    # =========================
+    st.markdown("## 📊 Risk Visualization")
+    st.plotly_chart(create_gauge(prob), use_container_width=True)
+
+    # =========================
+    # DISCUSSION SECTION
     # =========================
     st.markdown("## 📌 Understanding Your Health")
 
@@ -198,33 +183,47 @@ if st.button("🔍 Analyze Patient Risk", use_container_width=True):
 
     st.markdown(f"""
 ### 🧍 BMI Explanation
-**Category:** {bmi_cat}
 
-BMI helps estimate body fat:
-- High BMI → risk of diabetes & heart disease
-- Low BMI → possible undernutrition
+Your Body Mass Index (BMI) is classified as **{bmi_cat}**. BMI is a screening tool used to estimate body fat based on height and weight. 
+It provides an indication of whether an individual is underweight, within a healthy range, or overweight.
+
+Higher BMI values are associated with increased risk of metabolic diseases such as diabetes and cardiovascular conditions, while low BMI may indicate undernutrition.
+
+**Summary:**
+- High BMI → Increased risk of diabetes and heart disease  
+- Low BMI → Possible undernutrition  
+- Healthy BMI supports overall well-being  
 
 ---
 
 ### 🩸 Blood Glucose
-**Status:** {glucose_cat}
 
-- Normal: <140  
-- Prediabetes: 140–199  
-- Diabetes: ≥200  
+Your blood glucose level is categorized as **{glucose_cat}**. This measures the amount of sugar in your bloodstream and is a key indicator of metabolic health.
+
+Elevated glucose levels may indicate impaired insulin function and can lead to complications if not managed properly.
+
+**Reference:**
+- Normal: <140 mg/dL  
+- Prediabetes: 140–199 mg/dL  
+- Diabetes: ≥200 mg/dL  
+
+**Summary:**
+- Higher glucose → higher diabetes risk  
+- Monitoring helps early prevention  
 
 ---
 
 ### ⚠️ Risk Interpretation
-**Overall Risk:** {risk}
 
-Based on:
-- Blood sugar
-- Body weight
-- Age
-- Family history
+Your overall classification is **{risk}**. This prediction is based on multiple factors including glucose level, BMI, age, and family history.
 
-👉 Higher risk means greater likelihood of diabetes.
+**Key Factors:**
+- Blood sugar  
+- Body weight  
+- Age  
+- Genetic predisposition  
+
+👉 Higher risk means greater likelihood of developing diabetes.
 """)
 
     st.success(reco)
@@ -237,12 +236,28 @@ Based on:
     st.markdown("""
 - High blood pressure  
 - Heart disease  
-- Kidney problems  
+- Kidney damage  
 - Nerve damage  
 - Vision problems  
 
-Healthy lifestyle changes can reduce these risks.
+Healthy lifestyle changes can significantly reduce these risks.
 """)
+
+    # =========================
+    # DISCLAIMER
+    # =========================
+    st.markdown("""
+<div style="padding:15px;border-radius:10px;background-color:#fff3cd;color:#856404">
+⚠️ <strong>Medical Disclaimer:</strong><br><br>
+
+This system is designed as a clinical decision support tool to assist in identifying potential diabetes risk.  
+It is intended for educational and informational purposes only.
+
+<strong>It is NOT a substitute for professional medical advice, diagnosis, or treatment.</strong>
+
+Always consult a qualified healthcare provider for proper medical evaluation.
+</div>
+""", unsafe_allow_html=True)
 
 # =========================
 # FOOTER
@@ -250,6 +265,6 @@ Healthy lifestyle changes can reduce these risks.
 st.markdown("""
 <hr>
 <p style='text-align:center;color:gray'>
-⚠️ This tool is for educational purposes only.
+⚠️ Educational tool only. Not medical advice.
 </p>
 """, unsafe_allow_html=True)
