@@ -6,7 +6,6 @@ import joblib
 import numpy as np
 from datetime import date
 import plotly.graph_objects as go
-import math
 
 # =========================
 # CONFIG
@@ -53,47 +52,56 @@ def get_recommendation(risk):
         return "✅ Maintain a healthy lifestyle."
 
 # =========================
-# SEMI-CIRCLE GAUGE
+# SEMICIRCLE GAUGE (NO PIE)
 # =========================
-def create_pointer_gauge(prob):
+def create_gauge(prob):
     value = prob * 100
 
-    angle = (value / 100) * 180
-    radians = math.radians(180 - angle)
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=value,
 
-    x = 0.5 + 0.4 * math.cos(radians)
-    y = 0.5 + 0.4 * math.sin(radians)
+        number={
+            'suffix': "%",
+            'font': {'size': 40}
+        },
 
-    fig = go.Figure()
+        title={
+            'text': "Risk Level",
+            'font': {'size': 20}
+        },
 
-    fig.add_trace(go.Pie(
-        values=[35, 30, 35, 100],
-        rotation=180,
-        hole=0.6,
-        marker=dict(colors=["green", "yellow", "red", "rgba(0,0,0,0)"]),
-        text=["Low", "Medium", "High", ""],
-        direction="clockwise",
-        showlegend=False
+        gauge={
+            'shape': "angular",  # semicircle
+
+            'axis': {
+                'range': [0, 100],
+                'tickvals': [0, 25, 50, 75, 100]
+            },
+
+            'bar': {
+                'color': "black",
+                'thickness': 0.2
+            },
+
+            'steps': [
+                {'range': [0, 35], 'color': "green"},
+                {'range': [35, 65], 'color': "yellow"},
+                {'range': [65, 100], 'color': "red"},
+            ],
+
+            'threshold': {
+                'line': {'color': "white", 'width': 4},
+                'thickness': 0.75,
+                'value': value
+            }
+        }
     ))
 
-    # Needle
-    fig.add_shape(type="line",
-                  x0=0.5, y0=0.5,
-                  x1=x, y1=y,
-                  line=dict(color="white", width=4))
-
-    # Center dot
-    fig.add_shape(type="circle",
-                  x0=0.48, y0=0.48,
-                  x1=0.52, y1=0.52,
-                  fillcolor="white",
-                  line_color="white")
-
     fig.update_layout(
-        margin=dict(l=0, r=0, t=40, b=0),
         height=400,
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)"
+        margin=dict(l=20, r=20, t=50, b=20),
+        paper_bgcolor="rgba(0,0,0,0)"
     )
 
     return fig
@@ -146,7 +154,7 @@ with col2:
     st.caption("Risk increases with age")
 
 with col3:
-    bp = st.number_input("Diastolic BP", 0, 150)
+    bp = st.number_input("Diastolic Blood Pressure", 0, 150)
     st.caption("Lower blood pressure value")
 
     dpf = st.number_input("DPF (Family Risk)", 0.0, 3.0)
@@ -176,12 +184,12 @@ if st.button("🔍 Analyze Patient Risk", use_container_width=True):
     colB.metric("Probability", f"{prob:.2f}")
     colC.metric("Risk Level", risk)
 
-    # SEMI-CIRCLE GAUGE
-    fig = create_pointer_gauge(prob)
+    # SEMICIRCLE GAUGE
+    fig = create_gauge(prob)
     st.plotly_chart(fig, use_container_width=True)
 
     # =========================
-    # EDUCATIONAL SECTION
+    # EXPLANATION
     # =========================
     st.markdown("## 📌 Understanding Your Health")
 
@@ -192,13 +200,13 @@ if st.button("🔍 Analyze Patient Risk", use_container_width=True):
 ### 🧍 BMI Explanation
 **Category:** {bmi_cat}
 
-BMI indicates body fat level.
+BMI helps estimate body fat:
 - High BMI → risk of diabetes & heart disease
 - Low BMI → possible undernutrition
 
 ---
 
-### 🩸 Glucose Explanation
+### 🩸 Blood Glucose
 **Status:** {glucose_cat}
 
 - Normal: <140  
@@ -216,7 +224,7 @@ Based on:
 - Age
 - Family history
 
-👉 Higher risk = higher likelihood of diabetes.
+👉 Higher risk means greater likelihood of diabetes.
 """)
 
     st.success(reco)
@@ -231,9 +239,9 @@ Based on:
 - Heart disease  
 - Kidney problems  
 - Nerve damage  
-- Vision loss  
+- Vision problems  
 
-Healthy lifestyle changes can significantly reduce these risks.
+Healthy lifestyle changes can reduce these risks.
 """)
 
 # =========================
