@@ -15,168 +15,110 @@ st.set_page_config(page_title="Diabetes CDSS", layout="wide")
 # =========================
 # LOAD MODEL
 # =========================
-model = joblib.load("model.pkl")
-scaler = joblib.load("scaler.pkl")
+try:
+    model = joblib.load("model.pkl")
+    scaler = joblib.load("scaler.pkl")
+except:
+    st.error("Model/scaler not found.")
+    st.stop()
 
-# Try loading calibrated model (optional but ideal)
+# Optional: Properly trained calibrator
 try:
     calibrator = joblib.load("calibrator.pkl")
     USE_CALIBRATOR = True
 except:
     USE_CALIBRATOR = False
 
-LOW_THRESH = 0.35
-HIGH_THRESH = 0.65
+# =========================
+# DATASET MEDIANS (PIMA-BASED)
+# =========================
+MEDIANS = {
+    "skin": 20,
+    "insulin": 79
+}
 
 # =========================
-# CALIBRATION FUNCTION
+# CALIBRATION
 # =========================
-def calibrate_probability(prob):
-    """
-    Applies calibration if available, otherwise uses logistic smoothing
-    """
+def predict_probability(X_scaled):
     if USE_CALIBRATOR:
-        return calibrator.predict_proba([[prob]])[0][1]
-    else:
-        # Logistic calibration fallback (smooths extreme values)
-        return 1 / (1 + np.exp(-5 * (prob - 0.5)))
-
+        return calibrator.predict_proba(X_scaled)[0][1]
+    return model.predict_proba(X_scaled)[0][1]
 
 # =========================
-# CLINICAL NORMALIZATION
+# CLINICAL RULES
 # =========================
-def normalize_glucose(glucose):
-    return min(glucose / 200, 1.0)
-
-def normalize_bmi(bmi):
-    return min(bmi / 35, 1.0)
-
-def normalize_age(age):
-    return min(age / 100, 1.0)
-
-
-# =========================
-# FINAL RISK (CALIBRATED)
-# =========================
-def compute_final_risk(prob, glucose, bmi, age):
-    calibrated = calibrate_probability(prob)
-
-    g = normalize_glucose(glucose)
-    b = normalize_bmi(bmi)
-    a = normalize_age(age)
-
-    # ✔ Weighted, justified combination
-    score = (
-        calibrated * 0.7 +
-        g * 0.2 +
-        b * 0.07 +
-        a * 0.03
-    )
-
-    return min(score, 1.0), calibrated
-
-
-# =========================
-# HELPERS
-# =========================
-def get_risk_level(score, glucose):
-    if score >= HIGH_THRESH or glucose >= 200:
+def classify_risk(prob, glucose):
+    if glucose >= 200:
+        return "High Risk (Clinical Override)"
+    elif prob >= 0.65:
         return "High Risk"
-    elif score >= LOW_THRESH:
+    elif prob >= 0.35:
         return "Medium Risk"
     else:
         return "Low Risk"
 
+def medication_recommendation(risk, glucose):
+    if glucose >= 200:
+        return "🔴 Possible Diabetes → Refer for insulin therapy evaluation"
+    elif risk == "High Risk":
+        return "🟠 Consider Metformin (first-line) with physician guidance"
+    elif risk == "Medium Risk":
+        return "🟡 Lifestyle modification ± Metformin (case-dependent)"
+    else:
+        return "🟢 No medication required; preventive care advised"
 
-def get_color(risk):
-    return {
-        "High Risk": "#ff4d4d",
-        "Medium Risk": "#ffcc00",
-        "Low Risk": "#12c06a"
-    }[risk]
+def lifestyle_advice(risk):
+    if "High" in risk:
+        return "Strict diet control, regular monitoring, and immediate consultation."
+    elif risk == "Medium Risk":
+        return "Improve diet, increase physical activity, monitor glucose."
+    else:
+        return "Maintain healthy lifestyle."
 
-
-def get_bmi_category(bmi):
+# =========================
+# INTERPRETATION
+# =========================
+def bmi_category(bmi):
     if bmi < 18.5: return "Underweight"
     elif bmi < 25: return "Normal"
     elif bmi < 30: return "Overweight"
     else: return "Obese"
 
-
-def get_glucose_category(glucose):
+def glucose_category(glucose):
     if glucose < 140: return "Normal"
     elif glucose < 200: return "Prediabetes"
     else: return "Diabetes"
 
-
-def get_recommendation(risk):
-    if risk == "High Risk":
-        return "🚨 Immediate medical consultation is strongly advised."
-    elif risk == "Medium Risk":
-        return "⚠️ Improve diet, exercise, and monitor regularly."
-    else:
-        return "✅ Maintain a healthy lifestyle."
-
-
 # =========================
-# GAUGE
+# VISUALIZATION
 # =========================
-def create_gauge(prob):
-    value = prob * 100
-
+def gauge(prob):
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
-        value=value,
-        number={'suffix': "%", 'font': {'size': 52}},
+        value=prob * 100,
+        number={'suffix': "%"},
         gauge={
             'axis': {'range': [0, 100]},
-            'bar': {'color': "rgba(0,0,0,0)"},
             'steps': [
                 {'range': [0, 35], 'color': "#12c06a"},
                 {'range': [35, 65], 'color': "#ffcc00"},
                 {'range': [65, 100], 'color': "#ff4d4d"},
-            ],
-            'threshold': {
-                'line': {'color': "black", 'width': 6},
-                'value': value
-            }
+            ]
         }
     ))
-
-    fig.update_layout(height=420, margin=dict(l=10, r=10, t=20, b=10))
     return fig
-
 
 # =========================
 # HEADER
 # =========================
-st.markdown("""
-<div style="background:linear-gradient(90deg,#1e3c72,#2a5298);
-padding:25px;border-radius:12px">
-<h1 style="color:white;text-align:center;">🩺 Diabetes Clinical Decision Support System</h1>
-<p style="color:white;text-align:center;">AI-Powered Risk Assessment</p>
-</div>
-""", unsafe_allow_html=True)
-
-# =========================
-# PATIENT INFO
-# =========================
-colA, colB = st.columns([3,1])
-
-with colA:
-    name = st.text_input("👤 Patient Name")
-    sex = st.selectbox("Sex", ["Male", "Female"])
-
-with colB:
-    st.markdown("### 📅 Date")
-    st.info(date.today())
-
-st.divider()
+st.title("🩺 Diabetes Clinical Decision Support System")
+st.caption("Machine Learning + Clinical Guidelines Integration")
 
 # =========================
 # INPUTS
 # =========================
-st.markdown("## 📋 Health Information")
+st.markdown("## 📋 Patient Data")
 
 col1, col2, col3 = st.columns(3)
 
@@ -185,117 +127,117 @@ with col1:
     glucose = st.number_input("Glucose (mg/dL)", 0, 300)
 
 with col2:
-    bmi = st.number_input("BMI (Body Mass Index)", 0.0, 70.0)
+    bmi = st.number_input("BMI", 0.0, 70.0)
     age = st.number_input("Age", 1, 120)
 
 with col3:
-    bp = st.number_input("Diastolic Blood Pressure", 0, 150)
-    dpf = st.number_input("DPF (Family Risk)", 0.0, 3.0)
+    bp = st.number_input("Diastolic BP", 0, 150)
+    dpf = st.number_input("DPF", 0.0, 3.0)
 
 # =========================
-# ANALYZE
+# OPTIONAL INPUTS
 # =========================
-if st.button("🔍 Analyze Patient Risk", use_container_width=True):
+st.markdown("## 🧪 Optional Clinical Inputs")
 
-    # ✔ Maintain 8 features (model compatibility)
-    skin_thickness = 20
-    insulin = 80
+col4, col5 = st.columns(2)
 
-    input_data = np.array([[
-        preg,
-        glucose,
-        bp,
-        skin_thickness,
-        insulin,
-        bmi,
-        dpf,
-        age
-    ]])
+with col4:
+    skin = st.number_input("Skin Thickness (optional)", 0, 100, value=0)
 
-    input_scaled = scaler.transform(input_data)
-    raw_prob = model.predict_proba(input_scaled)[0][1]
+with col5:
+    insulin = st.number_input("Insulin (optional)", 0, 900, value=0)
 
-    final_score, calibrated_prob = compute_final_risk(
-        raw_prob, glucose, bmi, age
-    )
+used_defaults = False
 
-    risk = get_risk_level(final_score, glucose)
-    color = get_color(risk)
-    reco = get_recommendation(risk)
+if skin == 0:
+    skin = MEDIANS["skin"]
+    used_defaults = True
 
-    # =========================
-    # RESULT CARD
-    # =========================
-    st.markdown(f"""
-    <div style="padding:30px;border-radius:15px;background:{color};text-align:center">
-        <h1>{risk}</h1>
-        <h2>{final_score*100:.1f}% Risk Probability</h2>
-    </div>
-    """, unsafe_allow_html=True)
+if insulin == 0:
+    insulin = MEDIANS["insulin"]
+    used_defaults = True
 
-    # =========================
-    # GAUGE
-    # =========================
-    st.markdown("## 📊 Risk Visualization")
-    st.plotly_chart(create_gauge(final_score), use_container_width=True)
+# =========================
+# VALIDATION
+# =========================
+if glucose > 300 or bmi > 60:
+    st.warning("⚠️ Unusual values detected. Please verify inputs.")
+
+# =========================
+# ANALYSIS
+# =========================
+if st.button("🔍 Analyze"):
+
+    X = np.array([[preg, glucose, bp, skin, insulin, bmi, dpf, age]])
+    X_scaled = scaler.transform(X)
+
+    prob = predict_probability(X_scaled)
+    risk = classify_risk(prob, glucose)
 
     # =========================
-    # MODEL INSIGHT (UPGRADED)
+    # RESULT
     # =========================
-    st.markdown("## 🧠 Model Insight")
+    st.markdown(f"### 🎯 Risk: **{risk}**")
+    st.metric("Predicted Probability", f"{prob*100:.2f}%")
+
+    st.plotly_chart(gauge(prob), use_container_width=True)
+
+    # =========================
+    # INTERPRETATION
+    # =========================
+    st.markdown("## 📊 Interpretation")
+
+    st.write(f"BMI: {bmi_category(bmi)}")
+    st.write(f"Glucose: {glucose_category(glucose)}")
+
+    # =========================
+    # MEDICATION (NEW 🔥)
+    # =========================
+    st.markdown("## 💊 Medication Guidance")
+    st.info(medication_recommendation(risk, glucose))
+
+    # =========================
+    # LIFESTYLE
+    # =========================
+    st.markdown("## 🥗 Lifestyle Advice")
+    st.success(lifestyle_advice(risk))
+
+    # =========================
+    # CONFIDENCE EXPLANATION
+    # =========================
+    st.markdown("## 🧠 Model Confidence")
 
     st.info(f"""
-Raw Model Confidence: {raw_prob*100:.1f}%  
-Calibrated Probability: {calibrated_prob*100:.1f}%  
+Prediction Confidence: {prob*100:.2f}%
 
-This result combines:
-• Calibrated machine learning prediction  
-• Clinically normalized risk factors (glucose, BMI, age)  
+This probability is derived directly from the trained machine learning model.
+No manual weighting or artificial adjustments were applied.
 
-Calibration improves reliability by correcting model bias.
+Confidence depends on:
+• Data quality  
+• Feature completeness  
+• Similarity to training dataset  
 """)
 
     # =========================
-    # DISCUSSION
+    # ASSUMPTION DISCLOSURE
     # =========================
-    st.markdown("## 📌 Understanding Your Health")
+    if used_defaults:
+        st.warning("""
+⚠️ Missing values detected.
 
-    bmi_cat = get_bmi_category(bmi)
-    glucose_cat = get_glucose_category(glucose)
+Median dataset values were used:
+• Skin Thickness = 20  
+• Insulin = 79  
 
-    st.markdown(f"""
-### 🧍 BMI Explanation
-Your BMI is **{bmi_cat}**
-
-### 🩸 Blood Glucose
-Your glucose is **{glucose_cat}**
-
-### ⚠️ Risk Interpretation
-Your classification is **{risk}**
-
-👉 This result is based on calibrated ML + clinical factors.
+This may slightly affect prediction accuracy.
 """)
-
-    st.success(reco)
 
     # =========================
     # DISCLAIMER
     # =========================
     st.markdown("""
-<div style="padding:15px;border-radius:10px;background-color:#fff3cd;color:#856404">
-⚠️ <strong>Medical Disclaimer:</strong><br><br>
-This system is an aid only and NOT a substitute for professional medical advice.
-
-Always consult a qualified healthcare provider.
-</div>
-""", unsafe_allow_html=True)
-
-# =========================
-# FOOTER
-# =========================
-st.markdown("""
-<hr>
-<p style='text-align:center;color:gray'>
-Educational tool only. Not medical advice.
-</p>
-""", unsafe_allow_html=True)
+---
+⚠️ **Medical Disclaimer**  
+This system is intended as a clinical decision support aid only and does not replace professional medical judgment.
+""")
